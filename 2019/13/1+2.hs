@@ -194,22 +194,47 @@ run inputs input = let
     (_, _, outputs, _, _, halted) = execute initialState
   in if halted then outputs else []
 
+getJoystickInput :: Screen -> Value
+getJoystickInput screen =
+  let
+    ballX = getBallX screen
+    paddleX = getPaddleX screen
+  in if ballX == paddleX then 0 else (if ballX < paddleX then -1 else 1)
+
+runGame :: String -> Screen
+runGame input =
+  let
+    initialMemory = memWrite 0 2 $ parseMemory input
+    initialState = (initialMemory, [], [], 0, 0, False)
+  in f initialState mempty
+    where f (memory, _, _, ip, relativeBase, _) screen =
+            let
+              inputs = if screen == mempty then [] else [getJoystickInput screen]
+              newState = execute (memory, inputs, [], ip, relativeBase, False)
+              (_,_,outputs,_,_,halted) = newState
+              newScreen = updateScreen screen (reverse outputs)
+            in if halted
+                 then newScreen
+                 else f newState newScreen
+
+countBlocks :: Screen -> Int
+countBlocks screen = length $ filter (((==) 2) . snd) $ Map.toList screen
+
+getBallX :: Screen -> Value
+getBallX screen = fst $ fst $ head $ filter (((==) 4) . snd) $ Map.toList screen
+
+getPaddleX :: Screen -> Value
+getPaddleX screen = fst $ fst $ head $ filter (((==) 3) . snd) $ Map.toList screen
 
 updateScreen :: Screen -> [Value] -> Screen
 updateScreen screen d =
   let
     points = map (\[x,y,t] -> ((x,y), t)) $ chunksOf 3 d
-  in Map.union screen (Map.fromList points)
-
+  in Map.union (Map.fromList points) screen
 
 main = do
   input <- getContents
-  -- let initialState = (parseMemory input, [], [], 0, 0, False)
   let outputs = run [] input
-  print $ outputs
   let screen = updateScreen mempty $ reverse outputs
-  let blocks = filter (((==) 2) . snd) $ Map.toList screen
-  putStrLn $ (show $ length $ blocks)
-
-
-  -- not 12
+  print $ "Part 1: " ++ (show $ countBlocks $ screen)
+  print $ "Part 2: " ++ (show $ runGame input Map.! (-1,0))
